@@ -1,27 +1,28 @@
 {
-  "name": "react-example",
+  "name": "g-health",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "vite",
+    "dev:api": "wrangler dev",
     "build": "vite build",
-    "start": "node server.ts",
-    "preview": "bun run build && wrangler dev",
-    "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
-    "deploy": "bun run build && wrangler deploy"
+    "preview": "wrangler dev --local",
+    "deploy": "wrangler deploy",
+    "test": "bun test",
+    "seed": "bun run scripts/seed-demo.ts",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
-    "better-sqlite3": "^12.4.1",
+    "bcrypt": "^6.0.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
-    "express": "^4.22.1",
+    "hono": "^4.12.12",
     "lucide-react": "^0.546.0",
-    "mongoose": "^9.4.1",
+    "mongodb": "^7.1.1",
     "motion": "^12.34.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -31,14 +32,12 @@
     "vite": "^6.2.0"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.31.2",
-    "@types/express": "^4.17.25",
+    "@types/bun": "^1.3.12",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "mongodb-memory-server": "^9.1.6",
     "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0",
     "wrangler": "^4.81.1"
   }
 }

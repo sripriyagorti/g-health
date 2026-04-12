@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run:*)",
+      "Bash(bun test:*)",
+      "Bash(bun install:*)",
+      "Bash(ls:*)",
+      "Bash(bunx tsc:*)",
+      "mcp__mcp-server-context7__resolve-library-id",
+      "mcp__mcp-server-context7__query-docs"
+    ]
+  }
+}

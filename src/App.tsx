@@ -64,6 +64,7 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [isLoginMode, setIsLoginMode] = useState(true);
+  const [isFirstTime, setIsFirstTime] = useState(false);
   const [authError, setAuthError] = useState('');
   const [activeTab, setActiveTab] = useState('Overview');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -72,8 +73,6 @@ export default function App() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [mealDescription, setMealDescription] = useState('');
-  const [mealAnalysis, setMealAnalysis] = useState<{calories: number, tip: string} | null>(null);
-  const [isAnalyzingMeal, setIsAnalyzingMeal] = useState(false);
   const [preventionPlan, setPreventionPlan] = useState<string | null>(null);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [userData, setUserData] = useState<Partial<UserData>>({
@@ -286,26 +285,7 @@ export default function App() {
     setChatMessages(updatedMessages);
   };
 
-  const handleAnalyzeMeal = async () => {
-    if (!mealDescription.trim()) return;
-    setIsAnalyzingMeal(true);
-    try {
-      const response = await fetch('/api/analyze-meal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: mealDescription })
-      });
-      const data = await response.json();
-      if (data.result) {
-        const parsed = JSON.parse(data.result);
-        setMealAnalysis(parsed);
-      }
-    } catch (error) {
-      console.error("Meal analysis failed", error);
-    } finally {
-      setIsAnalyzingMeal(false);
-    }
-  };
+  // Meal analysis integrated into chat - see handleSendMessage
 
   const handleGeneratePlan = async () => {
     setIsGeneratingPlan(true);
@@ -388,14 +368,14 @@ export default function App() {
           Your personal health companion for tracking and preventing cardiometabolic risks.
         </p>
 
-        <div className="space-y-4 w-full max-w-xs md:max-w-sm pt-4">
-          <button 
-            onClick={() => { setIsLoginMode(false); setCurrentScreen('auth'); }}
+        <div className="space-y-3 w-full max-w-xs md:max-w-sm pt-4">
+          <button
+            onClick={() => { setIsLoginMode(false); setIsFirstTime(false); setCurrentScreen('auth'); }}
             className="w-full bg-black text-white py-4 rounded-2xl font-semibold shadow-md active:scale-[0.98] transition-transform"
           >
             Get Started
           </button>
-          <button 
+          <button
             onClick={() => { setIsLoginMode(true); setCurrentScreen('auth'); }}
             className="w-full bg-slate-100 text-slate-700 py-4 rounded-2xl font-semibold active:scale-[0.98] transition-transform"
           >
@@ -425,10 +405,10 @@ export default function App() {
     setAuthError('');
     try {
       const endpoint = isLoginMode ? '/api/auth/login' : '/api/auth/signup';
-      const body = isLoginMode 
+      const body = isLoginMode
         ? { email: authEmail, password: authPassword }
-        : { email: authEmail, password: authPassword, ...userData };
-        
+        : { email: authEmail, password: authPassword };
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -439,16 +419,22 @@ export default function App() {
         setAuthError(data.error);
       } else {
         setCurrentUser(data.user);
-        if (data.user.age) setUserData(data.user);
-        
-        // Fetch logs
+        if (data.user.age) {
+          setUserData(data.user);
+          // Returning user with complete profile
+          setCurrentScreen('dashboard');
+        } else {
+          // First-time signup: go to assessment
+          setIsFirstTime(true);
+          setCurrentScreen('assessment');
+        }
+
+        // Fetch logs if available
         const logsRes = await fetch(`/api/logs/${data.user.id}`);
         const logsData = await logsRes.json();
         if (logsData.logs) {
           // In a real app, we'd parse these back into weightLogs, bpLogs, etc.
-          // For simplicity, we'll just proceed to dashboard
         }
-        setCurrentScreen('dashboard');
       }
     } catch (error) {
       setAuthError('Authentication failed');
@@ -499,14 +485,8 @@ export default function App() {
         </div>
 
         {!isLoginMode && (
-          <div className="pt-4 border-t border-slate-100">
-            <p className="text-xs text-slate-500 mb-4 text-center">We need a few details to personalize your experience.</p>
-            <button 
-              onClick={() => setCurrentScreen('assessment')}
-              className="w-full bg-slate-100 text-slate-700 py-3 rounded-xl font-semibold text-sm active:scale-[0.98] transition-transform"
-            >
-              Fill out Health Profile
-            </button>
+          <div className="pt-4 border-t border-slate-100 space-y-3">
+            <p className="text-xs text-slate-500 text-center">Health profile will be completed after sign up</p>
           </div>
         )}
 
@@ -530,8 +510,25 @@ export default function App() {
     </motion.div>
   );
 
+  const handleSaveProfile = async () => {
+    // Save profile to backend if logged in, then go to dashboard
+    if (currentUser?.id) {
+      try {
+        await fetch(`/api/user/${currentUser.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(userData)
+        });
+      } catch (e) {
+        console.error("Failed to save profile", e);
+      }
+    }
+    setIsFirstTime(false);
+    setCurrentScreen('dashboard');
+  };
+
   const renderAssessment = () => (
-    <motion.div 
+    <motion.div
       initial={{ x: 300, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: -300, opacity: 0 }}
@@ -539,16 +536,18 @@ export default function App() {
     >
       <div className="px-6 pt-12 pb-6 bg-white border-b border-slate-100 sticky top-0 z-10">
         <div className="flex items-center space-x-4 mb-4">
-          <button onClick={() => setCurrentScreen('onboarding')} className="p-2 -ml-2 text-slate-400 md:hidden">
-            <ArrowLeft size={24} />
-          </button>
-          <h2 className="text-xl font-bold">Risk Assessment</h2>
+          {isFirstTime && (
+            <button onClick={() => setCurrentScreen('auth')} className="p-2 -ml-2 text-slate-400 md:hidden">
+              <ArrowLeft size={24} />
+            </button>
+          )}
+          <h2 className="text-xl font-bold">{isFirstTime ? 'Health Profile' : 'Update Profile'}</h2>
         </div>
-        <p className="text-sm text-slate-500">Complete your profile to see your personalized risk indicators.</p>
+        <p className="text-sm text-slate-500">{isFirstTime ? 'Complete your profile to get personalized risk indicators.' : 'Update your health information.'}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           <div className="space-y-6">
             <Card className="space-y-4">
               <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Biometrics</h3>
@@ -718,11 +717,11 @@ export default function App() {
               </div>
             </Card>
 
-            <button 
-              onClick={() => setCurrentScreen('dashboard')}
+            <button
+              onClick={handleSaveProfile}
               className="w-full bg-blue-600 text-white py-4 rounded-2xl font-semibold shadow-lg shadow-blue-200"
             >
-              View My Dashboard
+              {isFirstTime ? 'Complete Signup' : 'Save Profile'}
             </button>
           </div>
         </div>
@@ -751,30 +750,39 @@ export default function App() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Quick Action Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Card 
-            className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100 shadow-sm"
-            onClick={() => setCurrentScreen('analytics')}
-          >
-            <ProgressRing value={Math.abs(derivedMetrics.weightSlope)} max={7} size={100} strokeWidth={8} color={derivedMetrics.weightSlope < 0 ? "#10B981" : "#EF4444"} unit="%" />
-            <span className="mt-4 text-sm font-semibold text-slate-700">Weight {derivedMetrics.weightSlope < 0 ? 'Loss' : 'Gain'}</span>
-            <span className="text-xs text-slate-500">Target: ≥7% loss</span>
-          </Card>
-          <Card 
-            className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100 shadow-sm"
-            onClick={() => setCurrentScreen('analytics')}
-          >
-            <ProgressRing value={derivedMetrics.act7} max={150} size={100} strokeWidth={8} color="#3B82F6" unit="min" />
-            <span className="mt-4 text-sm font-semibold text-slate-700">Exercise</span>
-            <span className="text-xs text-slate-500">Goal: 150m/wk</span>
-          </Card>
-          <Card 
+          <Card
             className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100 shadow-sm"
             onClick={() => setCurrentScreen('logging')}
           >
-            <ProgressRing value={derivedMetrics.avgCal} max={2200} size={100} strokeWidth={8} color="#F59E0B" unit="kcal" />
-            <span className="mt-4 text-sm font-semibold text-slate-700">Avg Calories</span>
-            <span className="text-xs text-slate-500">Goal: 2200/day</span>
+            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 mb-3">
+              <Scale size={24} />
+            </div>
+            <span className="text-sm font-semibold text-slate-700">Log Weight</span>
+            <span className="text-xs text-slate-500 mt-1">Trend: {derivedMetrics.weightSlope < 0 ? '↓' : '↑'} {Math.abs(derivedMetrics.weightSlope).toFixed(1)}%</span>
+          </Card>
+
+          <Card
+            className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100 shadow-sm"
+            onClick={() => setCurrentScreen('logging')}
+          >
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 mb-3">
+              <Activity size={24} />
+            </div>
+            <span className="text-sm font-semibold text-slate-700">Log Activity</span>
+            <span className="text-xs text-slate-500 mt-1">This week: {derivedMetrics.act7} min</span>
+          </Card>
+
+          <Card
+            className="flex flex-col items-center justify-center p-6 cursor-pointer hover:bg-slate-50 transition-colors border border-slate-100 shadow-sm"
+            onClick={() => setCurrentScreen('ai_assistant')}
+          >
+            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 mb-3">
+              <Utensils size={24} />
+            </div>
+            <span className="text-sm font-semibold text-slate-700">Analyze Meal</span>
+            <span className="text-xs text-slate-500 mt-1">Ask AI for calories</span>
           </Card>
         </div>
 
@@ -941,22 +949,29 @@ export default function App() {
     setLogHdl('');
     setLogLdl('');
     setMealDescription('');
-    setMealAnalysis(null);
     setErrors({});
     
     setCurrentScreen('dashboard');
   };
 
   const renderLogging = () => (
-    <motion.div 
+    <motion.div
       initial={{ y: 300, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: 300, opacity: 0 }}
       className="flex flex-col h-full bg-slate-50"
     >
-      <div className="px-6 pt-12 pb-6 bg-white border-b border-slate-100 flex justify-between items-center sticky top-0 z-10">
-        <h2 className="text-3xl font-bold tracking-tight text-slate-900">Log Data</h2>
-        <button onClick={() => setCurrentScreen('dashboard')} className="text-slate-400 hover:text-slate-600 md:hidden"><X size={24} /></button>
+      <div className="px-6 pt-12 pb-6 bg-white border-b border-slate-100 sticky top-0 z-10">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900">Daily Log</h2>
+            <p className="text-sm text-slate-500">Track your health metrics</p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2 p-3 bg-blue-50 rounded-xl border border-blue-100 text-sm text-blue-700">
+          <Sparkles size={16} />
+          <span>💡 Use AI Assistant to analyze meals</span>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -970,62 +985,27 @@ export default function App() {
             </div>
             <div className="space-y-4">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-500">What did you eat?</label>
-                <div className="flex space-x-2">
-                  <input 
-                    type="text" 
-                    value={mealDescription}
-                    onChange={(e) => setMealDescription(e.target.value)}
-                    placeholder="e.g. 2 rotis with dal and salad" 
-                    className="flex-1 bg-slate-50 border-none rounded-xl p-3 text-sm" 
-                  />
-                  <button 
-                    onClick={handleAnalyzeMeal}
-                    disabled={isAnalyzingMeal || !mealDescription.trim()}
-                    className="px-4 bg-orange-100 text-orange-600 rounded-xl text-xs font-bold hover:bg-orange-200 transition-colors disabled:opacity-50"
-                  >
-                    {isAnalyzingMeal ? <Loader2 size={16} className="animate-spin" /> : "Analyze"}
-                  </button>
-                </div>
+                <label className="text-xs font-medium text-slate-500">Calories (kcal)</label>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={logCalories}
+                  onChange={(e) => setLogCalories(e.target.value === '' ? '' : parseInt(e.target.value))}
+                  className={cn("w-full bg-slate-50 border-none rounded-xl p-3 text-sm", errors.logCalories && "ring-2 ring-red-500")}
+                />
+                {errors.logCalories && <p className="text-[10px] text-red-500">{errors.logCalories}</p>}
               </div>
-
-              {mealAnalysis && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="p-3 bg-orange-50 rounded-xl border border-orange-100 space-y-1"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-orange-600 uppercase">AI Analysis</span>
-                    <span className="text-xs font-bold text-orange-700">{mealAnalysis.calories} kcal</span>
-                  </div>
-                  <p className="text-xs text-orange-800 leading-tight">{mealAnalysis.tip}</p>
-                </motion.div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-500">Manual Calories</label>
-                  <input 
-                    type="number" 
-                    placeholder="0" 
-                    value={logCalories}
-                    onChange={(e) => setLogCalories(e.target.value === '' ? '' : parseInt(e.target.value))}
-                    className={cn("w-full bg-slate-50 border-none rounded-xl p-3 text-sm", errors.logCalories && "ring-2 ring-red-500")}
-                  />
-                  {errors.logCalories && <p className="text-[10px] text-red-500">{errors.logCalories}</p>}
-                </div>
-                <div className="flex items-center space-x-2 pt-6">
-                  <input 
-                    type="checkbox" 
-                    id="carb" 
-                    checked={logRefinedCarbs}
-                    onChange={(e) => setLogRefinedCarbs(e.target.checked)}
-                    className="rounded text-blue-600" 
-                  />
-                  <label htmlFor="carb" className="text-xs font-medium text-slate-500">Refined Carbs?</label>
-                </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="carb"
+                  checked={logRefinedCarbs}
+                  onChange={(e) => setLogRefinedCarbs(e.target.checked)}
+                  className="rounded text-blue-600"
+                />
+                <label htmlFor="carb" className="text-xs font-medium text-slate-500">Refined Carbs?</label>
               </div>
+              <p className="text-[11px] text-slate-400">💡 Ask the AI assistant to analyze meals</p>
             </div>
           </Card>
 
@@ -1312,8 +1292,8 @@ export default function App() {
           <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 opacity-50">
             <MessageSquare size={48} className="text-slate-300" />
             <div className="space-y-1">
-              <p className="font-medium text-slate-600">How can I help you today?</p>
-              <p className="text-xs text-slate-400 max-w-[200px]">Ask about South Asian diet, exercise, or risk prevention.</p>
+              <p className="font-medium text-slate-600">How can I help?</p>
+              <p className="text-xs text-slate-400 max-w-xs">Log meals, track vitals, get health advice, or create a prevention plan.</p>
             </div>
           </div>
         )}
