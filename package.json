@@ -8,7 +8,7 @@
     "dev:api": "wrangler dev",
     "build": "vite build",
     "preview": "wrangler dev --local",
-    "deploy": "wrangler deploy",
+    "deploy": "vite build && wrangler deploy",
     "test": "bun test",
     "seed": "bun run scripts/seed-demo.ts",
     "lint": "tsc --noEmit"

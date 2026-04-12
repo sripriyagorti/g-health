@@ -7,16 +7,17 @@ import ai from "./server/routes/ai";
 type Env = {
   MONGODB_URI: string;
   GEMINI_API_KEY: string;
+  ASSETS: { fetch: (req: Request) => Promise<Response> };
 };
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Connect DB once
+// Inject env vars and connect DB once per worker instance
 let dbConnected = false;
 app.use("*", async (c, next) => {
+  process.env.MONGODB_URI = c.env.MONGODB_URI;
+  process.env.GEMINI_API_KEY = c.env.GEMINI_API_KEY;
   if (!dbConnected) {
-    process.env.MONGODB_URI = c.env.MONGODB_URI;
-    process.env.GEMINI_API_KEY = c.env.GEMINI_API_KEY;
     await connectDB();
     dbConnected = true;
   }
@@ -28,9 +29,7 @@ app.route("/api/auth", auth);
 app.route("/api/logs", logs);
 app.route("/api", ai);
 
-// 404 fallback
-app.get("*", (c) =>
-  c.json({ error: "Not found" }, 404)
-);
+// Serve React SPA for everything else
+app.get("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default app;
