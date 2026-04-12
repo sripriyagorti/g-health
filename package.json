@@ -5,10 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:api": "wrangler dev",
+    "dev:server": "bun --watch server.ts",
     "build": "vite build",
-    "preview": "wrangler dev --local",
-    "deploy": "vite build && wrangler deploy",
+    "start": "bun run server.ts",
     "test": "bun test",
     "seed": "bun run scripts/seed-demo.ts",
     "lint": "tsc --noEmit"
@@ -38,7 +37,6 @@
     "autoprefixer": "^10.4.21",
     "mongodb-memory-server": "^9.1.6",
     "tailwindcss": "^4.1.14",
-    "typescript": "~5.8.2",
-    "wrangler": "^4.81.1"
+    "typescript": "~5.8.2"
   }
 }
