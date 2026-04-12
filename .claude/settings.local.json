@@ -7,7 +7,9 @@
       "Bash(ls:*)",
       "Bash(bunx tsc:*)",
       "mcp__mcp-server-context7__resolve-library-id",
-      "mcp__mcp-server-context7__query-docs"
+      "mcp__mcp-server-context7__query-docs",
+      "Bash(bun remove:*)",
+      "Bash(bun add:*)"
     ]
   }
 }

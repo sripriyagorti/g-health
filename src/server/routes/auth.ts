@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { ObjectId } from "mongodb";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { getUsersCollection, validateEmail, validatePassword } from "../db";
 
 const auth = new Hono();

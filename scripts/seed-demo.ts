@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { connectDB, disconnectDB, getUsersCollection, getLogsCollection } from "../src/server/db";
 
 async function seedDemoData() {
