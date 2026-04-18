@@ -146,6 +146,10 @@ if (process.env.NODE_ENV === 'production') {
   setInterval(() => {
     const mem = process.memoryUsage();
     console.log(`[Memory] heapUsed: ${Math.round(mem.heapUsed / 1024 / 1024)}MB / heapTotal: ${Math.round(mem.heapTotal / 1024 / 1024)}MB`);
+    // Force GC hint for Bun (may not do anything but worth trying)
+    if (global.gc) {
+      try { global.gc(); } catch {}
+    }
   }, 30000);
 }
 

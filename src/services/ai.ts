@@ -334,31 +334,39 @@ async function callOllama(messages: any[], userContext?: string) {
     ? `${SYSTEM_PROMPT}\n\nUSER CONTEXT:\n${userContext}`
     : SYSTEM_PROMPT;
 
-  const response = await ollamaClient.chat({
-    model: OLLAMA_MODEL,
-    messages: [{ role: "system", content: systemMsg }, ...messages],
-    tools: toolSchemas,
-    stream: false,
-    options: {
-      temperature: 0.6,
-    },
-  });
+  try {
+    const response = await ollamaClient.chat({
+      model: OLLAMA_MODEL,
+      messages: [{ role: "system", content: systemMsg }, ...messages],
+      tools: toolSchemas,
+      stream: false,
+      options: {
+        temperature: 0.6,
+      },
+    });
 
-  let text = response.message?.content || "";
-  let calls: ToolCall[] = [];
+    let text = response.message?.content || "";
+    let calls: ToolCall[] = [];
 
-  if (response.message?.tool_calls) {
-    calls = response.message.tool_calls.map((tc: any) => ({
-      name: tc.function?.name || tc.name,
-      args: tc.function?.arguments
-        ? typeof tc.function.arguments === "string"
-          ? JSON.parse(tc.function.arguments)
-          : tc.function.arguments
-        : tc.arguments,
-    }));
+    if (response.message?.tool_calls) {
+      calls = response.message.tool_calls.map((tc: any) => ({
+        name: tc.function?.name || tc.name,
+        args: tc.function?.arguments
+          ? typeof tc.function.arguments === "string"
+            ? JSON.parse(tc.function.arguments)
+            : tc.function.arguments
+          : tc.arguments,
+      }));
+    }
+
+    return { text, calls };
+  } catch (err: any) {
+    console.error("Ollama chat error:", err.message || err);
+    const fallbackText = isCloud
+      ? "Chat temporarily unavailable. Please try again."
+      : "Chat unavailable. Is Ollama running locally?";
+    return { text: fallbackText, calls: [] };
   }
-
-  return { text, calls };
 }
 
 export async function generateAgentResponse(
@@ -374,17 +382,22 @@ export async function generateAgentResponse(
 }
 
 export async function getHealthAdvice(prompt: string) {
-  const response = await ollamaClient.chat({
-    model: OLLAMA_MODEL,
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: prompt },
-    ],
-    stream: false,
-    options: {
-      temperature: 0.7,
-    },
-  });
+  try {
+    const response = await ollamaClient.chat({
+      model: OLLAMA_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
+      stream: false,
+      options: {
+        temperature: 0.7,
+      },
+    });
 
-  return response.message?.content || "";
+    return response.message?.content || "";
+  } catch (err: any) {
+    console.error("getHealthAdvice error:", err.message || err);
+    return "Chat unavailable. Please try again.";
+  }
 }

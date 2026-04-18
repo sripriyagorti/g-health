@@ -74,6 +74,14 @@ async function buildUserContext(userId?: string) {
 }
 
 ai.post("/ai/chat", async (c) => {
+  // Feature flag to disable AI chat entirely
+  if (process.env.AI_CHAT_ENABLED !== 'true') {
+    return c.json({ 
+      text: "AI chat is temporarily unavailable. Please try again later.",
+      pendingCalls: [],
+    });
+  }
+
   try {
     const { messages, userId } = await c.req.json();
     if (!Array.isArray(messages)) return c.json({ error: "messages required" }, 400);
@@ -93,7 +101,14 @@ ai.post("/ai/chat", async (c) => {
     let trends: Array<{ type: string; data: any; marker_type?: string }> = [];
 
     for (let iter = 0; iter < 3; iter++) {
-      const { text: t, calls } = await generateAgentResponse(contents, userContext);
+      let result: { text: string; calls: any[] };
+      try {
+        result = await generateAgentResponse(contents, userContext);
+      } catch (e: any) {
+        console.error("generateAgentResponse failed:", e?.message || e);
+        result = { text: "Sorry, I'm having trouble connecting to the AI. Please try again in a moment.", calls: [] };
+      }
+      const { text: t, calls } = result;
       text = t || text;
 
       if (!calls.length) break;
@@ -187,8 +202,12 @@ ai.post("/ai/chat", async (c) => {
 
     return c.json({ text, pendingCalls, ...(trends.length > 0 && { trends }) });
   } catch (error: any) {
-    console.error("AI chat error:", error);
-    return c.json({ error: error.message || "Chat failed" }, 500);
+    console.error("AI chat error:", error?.message || error);
+    const msg = error?.message || "Chat failed";
+    const isOllamaError = msg.includes("Internal Server Error") || msg.includes("model") || msg.includes("not found");
+    return c.json({ 
+      error: isOllamaError ? "AI chat temporarily unavailable. Please try again." : msg 
+    }, isOllamaError ? 503 : 500);
   }
 });
 
