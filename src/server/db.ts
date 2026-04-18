@@ -1,9 +1,8 @@
 import { MongoClient, Db, Collection, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 
-dotenv.config(); // no-op in Workers, useful for local dev
+dotenv.config();
 
-// Types
 export interface User {
   _id?: ObjectId;
   email: string;
@@ -21,6 +20,8 @@ export interface User {
   ldl?: number;
   activityLevel?: string;
   familyHistory?: boolean;
+  cuisinePrefs?: string[];
+  exercisePrefs?: string[];
 }
 
 export interface Log {
@@ -31,34 +32,93 @@ export interface Log {
   timestamp: Date;
 }
 
-// Client & DB
+export interface BiomarkerDoc {
+  _id?: ObjectId;
+  userId: ObjectId;
+  markerType: string;
+  value: number;
+  unit: string;
+  testDate: Date;
+  notes?: string;
+  source?: string;
+  createdAt: Date;
+}
+
+export interface MedicationDoc {
+  _id?: ObjectId;
+  userId: ObjectId;
+  name: string;
+  dosage: string;
+  frequency: string;
+  startDate: Date;
+  indication?: string;
+  notes?: string;
+  active?: boolean;
+  createdAt: Date;
+}
+
+export interface MedicationAdherenceDoc {
+  _id?: ObjectId;
+  userId: ObjectId;
+  medicationId: ObjectId;
+  date: string;
+  taken: boolean;
+  notes?: string;
+  timestamp: Date;
+}
+
+export interface BehaviorProfileDoc {
+  _id?: ObjectId;
+  userId: ObjectId;
+  stage: string;
+  updatedAt: Date;
+  stageHistory: Array<{ stage: string; date: Date }>;
+  currentGoals?: string[];
+  lastLogDate?: Date;
+}
+
 let client: MongoClient | null = null;
 let db: Db | null = null;
 
 export async function connectDB() {
-  if (db) return db; // reuse existing connection
+  if (db) return db;
 
   const uri = process.env.MONGODB_URI;
   if (!uri) throw new Error("MONGODB_URI not set");
 
   try {
-    client = new MongoClient(uri);
+    client = new MongoClient(uri, {
+      maxPoolSize: 5,
+      minPoolSize: 1,
+      maxIdleTimeMS: 30000,
+      socketTimeoutMS: 45000,
+      serverSelectionTimeoutMS: 10000,
+    });
     await client.connect();
     db = client.db();
 
-    // Create indexes
-    const usersCollection = db.collection<User>('users');
-    const logsCollection = db.collection<Log>('logs');
+    const users = db.collection<User>('users');
+    const logs = db.collection<Log>('logs');
+    const biomarkers = db.collection<BiomarkerDoc>('biomarkerLogs');
+    const meds = db.collection<MedicationDoc>('medications');
+    const adherence = db.collection<MedicationAdherenceDoc>('medicationAdherence');
+    const behavior = db.collection<BehaviorProfileDoc>('userBehaviorProfiles');
 
-    await usersCollection.createIndex({ email: 1 }, { unique: true });
-    await logsCollection.createIndex({ userId: 1, timestamp: -1 });
-    await logsCollection.createIndex({ userId: 1, type: 1, timestamp: 1 }, { unique: true });
+    await users.createIndex({ email: 1 }, { unique: true });
+    await logs.createIndex({ userId: 1, timestamp: -1 });
+    await logs.createIndex({ userId: 1, type: 1, timestamp: 1 }, { unique: true });
+    await biomarkers.createIndex({ userId: 1, testDate: -1 });
+    await biomarkers.createIndex({ userId: 1, markerType: 1, testDate: -1 });
+    await meds.createIndex({ userId: 1 });
+    await adherence.createIndex({ userId: 1, medicationId: 1, date: -1 });
+    await adherence.createIndex({ userId: 1, medicationId: 1, date: 1 }, { unique: true });
+    await behavior.createIndex({ userId: 1 }, { unique: true });
 
     console.log("✓ Connected to MongoDB");
     return db;
   } catch (error) {
     console.error("✗ MongoDB connection error:", error);
-    throw error; // let caller handle it (no process.exit in Workers)
+    throw error;
   }
 }
 
@@ -76,31 +136,27 @@ export async function disconnectDB() {
 }
 
 export function getDB(): Db {
-  if (!db) {
-    throw new Error("Database not connected. Call connectDB() first.");
-  }
+  if (!db) throw new Error("Database not connected. Call connectDB() first.");
   return db;
 }
 
-export function getUsersCollection(): Collection<User> {
-  return getDB().collection<User>('users');
-}
-
-export function getLogsCollection(): Collection<Log> {
-  return getDB().collection<Log>('logs');
-}
+export const getUsersCollection = () => getDB().collection<User>('users');
+export const getLogsCollection = () => getDB().collection<Log>('logs');
+export const getBiomarkersCollection = () => getDB().collection<BiomarkerDoc>('biomarkerLogs');
+export const getMedicationsCollection = () => getDB().collection<MedicationDoc>('medications');
+export const getAdherenceCollection = () => getDB().collection<MedicationAdherenceDoc>('medicationAdherence');
+export const getBehaviorCollection = () => getDB().collection<BehaviorProfileDoc>('userBehaviorProfiles');
 
 export function isDBConnected() {
   return db !== null;
 }
 
-// Validation helpers
 export function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 export function validatePassword(password: string): boolean {
-  return password && password.length >= 3;
+  return !!password && password.length >= 3;
 }
 
 export function validateLogData(type: string, data: any): boolean {
@@ -116,8 +172,21 @@ export function validateLogData(type: string, data: any): boolean {
     case 'exercise':
       return typeof data.type === 'string' && typeof data.durationMinutes === 'number';
     case 'lipids':
-      return true; // All fields optional
+      return true;
     default:
       return false;
   }
+}
+
+const BIOMARKER_TYPES = new Set([
+  'fasting_glucose', 'total_cholesterol', 'hdl', 'ldl', 'triglycerides',
+  'crp', 'homocysteine', 'uric_acid', 'hba1c'
+]);
+
+export function validateBiomarker(marker: any): boolean {
+  return !!marker
+    && typeof marker.markerType === 'string'
+    && BIOMARKER_TYPES.has(marker.markerType)
+    && typeof marker.value === 'number'
+    && typeof marker.unit === 'string';
 }
