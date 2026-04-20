@@ -296,7 +296,7 @@ export function Profile({ onSignOut, onTriggerOnboarding }: Props) {
         </Card>
 
         <p className="text-center text-[11px] text-ink-soft">
-          MetaboPrevent · Evidence-based cardiometabolic prevention
+          G-Health · Evidence-based cardiometabolic prevention
         </p>
       </div>
     </motion.div>

@@ -54,7 +54,7 @@ export function SideNav({ current, onChange }: Props) {
           <Heart size={18} fill="currentColor" />
         </div>
         <div>
-          <h1 className="font-bold text-lg tracking-tight text-ink leading-none">MetaboPrevent</h1>
+          <h1 className="font-bold text-lg tracking-tight text-ink leading-none">G-Health</h1>
           <p className="text-[11px] text-ink-soft mt-1">Cardiometabolic coach</p>
         </div>
       </div>

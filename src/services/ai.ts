@@ -298,7 +298,7 @@ const toolSchemas = [
   },
 ];
 
-export const SYSTEM_PROMPT = `You are MetaboPrevent, a brief, direct health coach for South Asian adults.
+export const SYSTEM_PROMPT = `You are G-Health, a brief, direct health coach for South Asian adults.
 
 ## CRITICAL RULES
 

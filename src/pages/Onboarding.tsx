@@ -33,7 +33,7 @@ export function Onboarding({ onSignUp, onSignIn, onDemo }: Props) {
           <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700 bg-brand-50 px-3 py-1 rounded-full">
             <Sparkles size={12} /> AI-powered prevention
           </span>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-ink">MetaboPrevent</h1>
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-ink">G-Health</h1>
           <p className="text-ink-muted text-base md:text-lg leading-relaxed">
             Your cardiometabolic coach for diabetes, hypertension, and heart health. Chat, log, learn.
           </p>
