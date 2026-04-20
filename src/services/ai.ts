@@ -1,17 +1,11 @@
-import { Ollama } from "ollama";
+import OpenAI from "openai";
 
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen3:8b";
+export const TEXT_MODEL = process.env.OPENAI_TEXT_MODEL || "gpt-5-nano";
+export const VISION_MODEL = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
 
-const isCloud = process.env.OLLAMA_API_KEY;
+export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const ollamaClient = isCloud
-  ? new Ollama({
-      host: "https://ollama.com",
-      headers: { Authorization: `Bearer ${process.env.OLLAMA_API_KEY}` },
-    })
-  : new Ollama();
-
-const toolSchemas = [
+export const toolSchemas = [
   {
     type: "function",
     function: {
@@ -20,14 +14,8 @@ const toolSchemas = [
       parameters: {
         type: "object",
         properties: {
-          meal_name: {
-            type: "string",
-            description: "Name of food/meal (e.g. 'Chicken tikka masala')",
-          },
-          portion_size: {
-            type: "string",
-            description: "Portion (e.g. '1 cup', '200g')",
-          },
+          meal_name: { type: "string", description: "Name of food/meal (e.g. 'Chicken tikka masala')" },
+          portion_size: { type: "string", description: "Portion (e.g. '1 cup', '200g')" },
           calories: { type: "number", description: "Total calories" },
           protein_g: { type: "number" },
           carbs_g: { type: "number" },
@@ -80,14 +68,8 @@ const toolSchemas = [
       parameters: {
         type: "object",
         properties: {
-          exercise_type: {
-            type: "string",
-            description: "Type (e.g. brisk walking, yoga)",
-          },
-          duration_minutes: {
-            type: "number",
-            description: "Duration in minutes",
-          },
+          exercise_type: { type: "string", description: "Type (e.g. brisk walking, yoga)" },
+          duration_minutes: { type: "number", description: "Duration in minutes" },
           intensity: { type: "string", enum: ["light", "moderate", "vigorous"] },
           timestamp: { type: "string", description: "Time" },
         },
@@ -105,17 +87,7 @@ const toolSchemas = [
         properties: {
           marker_type: {
             type: "string",
-            enum: [
-              "fasting_glucose",
-              "total_cholesterol",
-              "hdl",
-              "ldl",
-              "triglycerides",
-              "crp",
-              "homocysteine",
-              "uric_acid",
-              "hba1c",
-            ],
+            enum: ["fasting_glucose", "total_cholesterol", "hdl", "ldl", "triglycerides", "crp", "homocysteine", "uric_acid", "hba1c"],
           },
           value: { type: "number", description: "Measured value" },
           unit: { type: "string", description: "Unit (mg/dL, %, etc)" },
@@ -151,10 +123,7 @@ const toolSchemas = [
         type: "object",
         properties: {
           food_query: { type: "string", description: "Food name to search" },
-          portion_size: {
-            type: "string",
-            description: "Portion (e.g. '100g', '1 cup')",
-          },
+          portion_size: { type: "string", description: "Portion (e.g. '100g', '1 cup')" },
         },
         required: ["food_query"],
       },
@@ -168,14 +137,8 @@ const toolSchemas = [
       parameters: {
         type: "object",
         properties: {
-          user_risk_profile: {
-            type: "string",
-            enum: ["Low", "Moderate", "High"],
-          },
-          focus_area: {
-            type: "string",
-            enum: ["diet", "exercise", "weight", "bp", "overall"],
-          },
+          user_risk_profile: { type: "string", enum: ["Low", "Moderate", "High"] },
+          focus_area: { type: "string", enum: ["diet", "exercise", "weight", "bp", "overall"] },
         },
         required: ["user_risk_profile", "focus_area"],
       },
@@ -186,11 +149,7 @@ const toolSchemas = [
     function: {
       name: "get_weight_trend",
       description: "Fetch 60-day weight history to analyze trend.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-      },
+      parameters: { type: "object", properties: {}, required: [] },
     },
   },
   {
@@ -198,11 +157,7 @@ const toolSchemas = [
     function: {
       name: "get_bp_trend",
       description: "Fetch 60-day blood pressure history.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-      },
+      parameters: { type: "object", properties: {}, required: [] },
     },
   },
   {
@@ -210,11 +165,7 @@ const toolSchemas = [
     function: {
       name: "get_calorie_trend",
       description: "Fetch 30-day daily calorie intake.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-      },
+      parameters: { type: "object", properties: {}, required: [] },
     },
   },
   {
@@ -227,15 +178,7 @@ const toolSchemas = [
         properties: {
           marker_type: {
             type: "string",
-            enum: [
-              "fasting_glucose",
-              "total_cholesterol",
-              "hdl",
-              "ldl",
-              "triglycerides",
-              "crp",
-              "hba1c",
-            ],
+            enum: ["fasting_glucose", "total_cholesterol", "hdl", "ldl", "triglycerides", "crp", "hba1c"],
           },
         },
         required: ["marker_type"],
@@ -309,6 +252,10 @@ export const SYSTEM_PROMPT = `You are G-Health, a brief, direct health coach for
 5. For medication photos or lab reports: call extract_lab_results to parse the image.
 6. For adding new meds: call add_medication with name, dosage, frequency.
 7. For "I took medicine today": call log_medication_taken with med name.
+8. **MEAL + IMAGE**: When user mentions meal (breakfast/lunch/dinner/ate/had/food) WITH an image:
+   - ALWAYS call get_food_nutrition_data based on what you see in the image
+   - Then call log_meal with the extracted nutrition data
+   - Do NOT ask follow-up questions—analyze the image and log immediately
 
 ## RESPONSE STYLE
 
@@ -325,79 +272,159 @@ export interface ChatContent {
 }
 
 interface ToolCall {
+  id?: string;
   name: string;
   args?: Record<string, any>;
 }
 
-async function callOllama(messages: any[], userContext?: string) {
-  const systemMsg = userContext
-    ? `${SYSTEM_PROMPT}\n\nUSER CONTEXT:\n${userContext}`
-    : SYSTEM_PROMPT;
+function hasImages(contents: ChatContent[]): boolean {
+  return contents.some(c => c.parts?.some((p: any) => p.inlineData));
+}
 
-  try {
-    const response = await ollamaClient.chat({
-      model: OLLAMA_MODEL,
-      messages: [{ role: "system", content: systemMsg }, ...messages],
-      tools: toolSchemas,
-      stream: false,
-      options: {
-        temperature: 0.6,
-      },
-    });
-
-    let text = response.message?.content || "";
-    let calls: ToolCall[] = [];
-
-    if (response.message?.tool_calls) {
-      calls = response.message.tool_calls.map((tc: any) => ({
-        name: tc.function?.name || tc.name,
-        args: tc.function?.arguments
-          ? typeof tc.function.arguments === "string"
-            ? JSON.parse(tc.function.arguments)
-            : tc.function.arguments
-          : tc.arguments,
-      }));
-    }
-
-    return { text, calls };
-  } catch (err: any) {
-    console.error("Ollama chat error:", err.message || err);
-    const fallbackText = isCloud
-      ? "Chat temporarily unavailable. Please try again."
-      : "Chat unavailable. Is Ollama running locally?";
-    return { text: fallbackText, calls: [] };
+function extractBase64(data: string, mimeType: string): string {
+  if (data.startsWith("data:")) {
+    const m = data.match(/data:([^;]+);base64,(.+)/);
+    if (m) return m[2];
   }
+  return data;
+}
+
+export function buildOpenAIMessages(
+  contents: ChatContent[],
+  systemMsg: string,
+): OpenAI.ChatCompletionMessageParam[] {
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: "system", content: systemMsg },
+  ];
+
+  for (const content of contents) {
+    if (content.role === "model") {
+      const toolCalls = content.parts
+        .filter((p: any) => p.functionCall)
+        .map((p: any, i: number) => ({
+          id: p.functionCall.id || `call_${Date.now()}_${i}`,
+          type: "function" as const,
+          function: {
+            name: p.functionCall.name,
+            arguments: JSON.stringify(p.functionCall.args || {}),
+          },
+        }));
+
+      const text = content.parts.find((p: any) => p.text)?.text ?? null;
+
+      if (toolCalls.length > 0) {
+        messages.push({ role: "assistant", content: text, tool_calls: toolCalls });
+      } else if (text) {
+        messages.push({ role: "assistant", content: text });
+      }
+    } else {
+      const parts: OpenAI.ChatCompletionContentPart[] = [];
+      const toolResults: string[] = [];
+
+      for (const part of content.parts) {
+        if (part.text) {
+          parts.push({ type: "text", text: part.text });
+        } else if (part.inlineData) {
+          const mime = part.inlineData.mimeType || "image/jpeg";
+          const base64 = extractBase64(part.inlineData.data, mime);
+          parts.push({
+            type: "image_url",
+            image_url: { url: `data:${mime};base64,${base64}` },
+          });
+        } else if (part.functionResponse && !part.functionResponse.id) {
+          // Non-native format — embed as text for backward compat
+          toolResults.push(
+            `[${part.functionResponse.name} result: ${JSON.stringify(part.functionResponse.response)}]`,
+          );
+        }
+      }
+
+      if (toolResults.length > 0) {
+        parts.push({ type: "text", text: toolResults.join("\n") });
+      }
+
+      // Check for native tool responses (with tool_call_id)
+      const toolResponses = content.parts
+        .filter((p: any) => p.functionResponse?.id)
+        .map((p: any) => ({
+          role: "tool" as const,
+          tool_call_id: p.functionResponse.id,
+          content: JSON.stringify(p.functionResponse.response || {}),
+        }));
+
+      if (toolResponses.length > 0) {
+        messages.push(...(toolResponses as any));
+      }
+
+      if (parts.length === 0 && toolResponses.length === 0) continue;
+
+      if (parts.length > 0) {
+        messages.push({
+          role: "user",
+          content: parts.length === 1 && parts[0].type === "text"
+            ? (parts[0] as OpenAI.ChatCompletionContentPartText).text
+            : parts,
+        });
+      }
+    }
+  }
+
+  return messages;
 }
 
 export async function generateAgentResponse(
   contents: ChatContent[],
   userContext?: string,
-) {
-  const messages = contents.map((c) => ({
-    role: c.role,
-    content: c.parts.map((p: any) => p.text || JSON.stringify(p)).join("\n"),
-  }));
+): Promise<{ text: string; calls: ToolCall[] }> {
+  const systemMsg = userContext
+    ? `${SYSTEM_PROMPT}\n\nUSER CONTEXT:\n${userContext}`
+    : SYSTEM_PROMPT;
 
-  return callOllama(messages, userContext);
+  const imagesPresent = hasImages(contents);
+  const model = imagesPresent ? VISION_MODEL : TEXT_MODEL;
+  const messages = buildOpenAIMessages(contents, systemMsg);
+
+  try {
+    const response = await openai.chat.completions.create({
+      model,
+      messages,
+      tools: toolSchemas as any,
+      tool_choice: "auto",
+    });
+
+    const msg = response.choices[0]?.message;
+    const text = msg?.content || "";
+    const calls: ToolCall[] = (msg?.tool_calls || []).map((tc) => ({
+      id: tc.id,
+      name: tc.function.name,
+      args: JSON.parse(tc.function.arguments || "{}"),
+    }));
+
+    return { text, calls };
+  } catch (err: any) {
+    console.error("[generateAgentResponse] OpenAI error:", err.message || err);
+    if (imagesPresent) {
+      return {
+        text: "Image processing unavailable. Describe what you ate (e.g., '1 plate of dal rice').",
+        calls: [],
+      };
+    }
+    return { text: "Chat unavailable. Please try again.", calls: [] };
+  }
 }
 
-export async function getHealthAdvice(prompt: string) {
+export async function getHealthAdvice(prompt: string): Promise<string> {
   try {
-    const response = await ollamaClient.chat({
-      model: OLLAMA_MODEL,
+    const response = await openai.chat.completions.create({
+      model: TEXT_MODEL,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: prompt },
       ],
-      stream: false,
-      options: {
-        temperature: 0.7,
-      },
     });
-
-    return response.message?.content || "";
+    return response.choices[0]?.message?.content || "";
   } catch (err: any) {
-    console.error("getHealthAdvice error:", err.message || err);
+    console.error("[getHealthAdvice] error:", err.message || err);
     return "Chat unavailable. Please try again.";
   }
 }

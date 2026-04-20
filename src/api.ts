@@ -71,6 +71,9 @@ export const api = {
   profileSummary: (profile: Record<string, any>) =>
     fetch('/api/ai/profile-summary', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile }) }).then(json<{ bullets: Array<{ insight: string; action: string }> }>),
 
+  describeImage: (image: string) =>
+    fetch('/api/ai/describe-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image }) }).then(json<{ description: string }>),
+
   demoReset: () =>
     fetch('/api/demo/reset', { method: 'POST' }).then(json<{ ok: boolean; logs: number }>),
 };

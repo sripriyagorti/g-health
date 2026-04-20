@@ -11,6 +11,20 @@ import bcrypt from "bcryptjs";
 
 const app = new Hono();
 
+// Logging middleware
+app.use('*', async (c, next) => {
+  const start = Date.now();
+  const method = c.req.method;
+  const path = c.req.path;
+  console.log(`\n[${new Date().toISOString()}] → ${method} ${path}`);
+
+  await next();
+
+  const duration = Date.now() - start;
+  const status = c.res.status;
+  console.log(`← ${status} ${method} ${path} (${duration}ms)`);
+});
+
 // Request timeout middleware (30s max for Railway)
 app.use('*', async (c, next) => {
   const controller = new AbortController();
@@ -24,10 +38,16 @@ app.use('*', async (c, next) => {
 
 // Demo-only: re-seed test@test.com data without touching user record
 app.post("/api/demo/reset", async (c) => {
+  console.log("[Demo Reset] POST /api/demo/reset - Starting demo data reset");
   try {
     const DEMO_EMAIL = "test@test.com";
+    console.log(`[Demo Reset] Looking up demo account: ${DEMO_EMAIL}`);
     const user = await getUsersCollection().findOne({ email: DEMO_EMAIL });
-    if (!user) return c.json({ error: "Demo account not found" }, 404);
+    if (!user) {
+      console.log(`[Demo Reset] Demo account not found`);
+      return c.json({ error: "Demo account not found" }, 404);
+    }
+    console.log(`[Demo Reset] Found demo user: ${user.name}`);
     const userId = user._id;
 
     // Wipe all logs/data for this user
@@ -80,6 +100,7 @@ app.post("/api/demo/reset", async (c) => {
       logs.push({ userId, type:"exercise", data:{...exs[Math.floor(d/4)%exs.length]}, timestamp: daysAgo(d,18) });
 
     await getLogsCollection().insertMany(logs);
+    console.log(`[Demo Reset] Inserted ${logs.length} log entries`);
 
     const biomarkerDocs = [
       { markerType:"fasting_glucose",value:108,unit:"mg/dL",testDate:daysAgo(45),source:"lab_report"},
@@ -95,9 +116,11 @@ app.post("/api/demo/reset", async (c) => {
       { markerType:"triglycerides",value:165,unit:"mg/dL",testDate:daysAgo(15),source:"lab_report"},
     ];
     await getBiomarkersCollection().insertMany(biomarkerDocs.map(b => ({ ...b, userId, createdAt: b.testDate })));
+    console.log(`[Demo Reset] Inserted ${biomarkerDocs.length} biomarker entries`);
 
     const { insertedId: med1Id } = await getMedicationsCollection().insertOne({ userId, name:"Lisinopril",dosage:"5 mg",frequency:"Once daily",startDate:daysAgo(58),indication:"Hypertension",active:true,createdAt:daysAgo(58) });
     const { insertedId: med2Id } = await getMedicationsCollection().insertOne({ userId, name:"Atorvastatin",dosage:"10 mg",frequency:"Once daily",startDate:daysAgo(58),indication:"Cholesterol",active:true,createdAt:daysAgo(58) });
+    console.log(`[Demo Reset] Inserted 2 medications`);
 
     const adherence: any[] = [];
     const miss1 = new Set([14,27,41]); const miss2 = new Set([9,33]);
@@ -107,10 +130,12 @@ app.post("/api/demo/reset", async (c) => {
       adherence.push({ userId, medicationId:med2Id, date, taken:!miss2.has(d), timestamp:daysAgo(d,21) });
     }
     await getAdherenceCollection().insertMany(adherence);
+    console.log(`[Demo Reset] Inserted ${adherence.length} adherence entries`);
+    console.log(`[Demo Reset] Demo reset completed successfully`);
 
     return c.json({ ok: true, logs: logs.length });
   } catch (e: any) {
-    console.error("Demo reset error:", e);
+    console.error("[Demo Reset] Error:", e?.message || e);
     return c.json({ error: e.message }, 500);
   }
 });

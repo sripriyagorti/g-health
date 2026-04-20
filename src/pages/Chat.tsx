@@ -10,6 +10,7 @@ import { PageHeader } from '../components/PageHeader';
 import { GenerativeUICard } from '../components/GenerativeUICard';
 import { ChatMetricsCard, buildWeightMetric, buildBPMetric, buildGlucoseMetric } from '../components/ChatMetricsCard';
 import { ChatTrendChart } from '../components/ChatTrendChart';
+import { compressImage } from '../utils/imageCompression';
 import { cn } from '../lib/utils';
 import type { ChatMessage, PendingFunctionCall, PendingFunctionName } from '../types';
 
@@ -54,10 +55,12 @@ function messagesForAPI(msgs: ChatMessage[]) {
     .map(m => {
       const parts: any[] = [];
       if (m.text) parts.push({ text: m.text });
-      if (m.image) {
+      if (m.image && m.image.startsWith('data:')) {
         const mimeType = m.image.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
-        const data = m.image.split(',')[1];
-        parts.push({ inlineData: { data, mimeType } });
+        const base64Data = m.image.split(',')[1];
+        if (base64Data) {
+          parts.push({ inlineData: { data: base64Data, mimeType } });
+        }
       }
       return { role: m.role === 'ai' ? 'model' : 'user', parts };
     });
@@ -89,7 +92,20 @@ export function Chat() {
     const text = (textOverride ?? input).trim();
     if (!text && !image) return;
 
-    const userMsg: ChatMessage = { role: 'user', text: text || undefined, image: image || undefined };
+    let compressedImage: string | undefined;
+    if (image) {
+      console.log('[Chat] Compressing image before send...');
+      try {
+        compressedImage = await compressImage(image);
+        console.log('[Chat] Image compressed successfully');
+      } catch (err) {
+        console.error('[Chat] Image compression failed:', err);
+        setMessages(prev => [...prev, { role: 'ai', text: `Failed to process image: ${err instanceof Error ? err.message : 'Unknown error'}` }]);
+        return;
+      }
+    }
+
+    const userMsg: ChatMessage = { role: 'user', text: text || undefined, image: compressedImage || undefined };
     const next = [...messages, userMsg];
     setMessages(next);
     setInput('');

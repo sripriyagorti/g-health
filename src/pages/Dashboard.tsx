@@ -5,6 +5,8 @@ import { Card } from '../components/ui/Card';
 import { IconBadge } from '../components/ui/IconBadge';
 import { Button } from '../components/ui/Button';
 import { RiskCard } from '../components/RiskCard';
+import { TipsTrigger } from '../components/TipsTrigger';
+import { TipsModal } from '../components/TipsModal';
 import { PageHeader } from '../components/PageHeader';
 import { LogDetailSheet } from '../components/LogDetailSheet';
 import type { DetailType } from '../components/LogDetailSheet';
@@ -21,6 +23,7 @@ export function Dashboard({ onOpenChat, onOpenProfile }: Props) {
   const { user } = useAuth();
   const { weightLogs, bpLogs, foodLogs, exerciseLogs } = useData();
   const [detail, setDetail] = useState<DetailType | null>(null);
+  const [tipsOpen, setTipsOpen] = useState(false);
 
   const derived = useMemo(
     () => calculateDerivedMetrics({ weights: weightLogs, bps: bpLogs, foods: foodLogs, exercises: exerciseLogs }),
@@ -65,6 +68,8 @@ export function Dashboard({ onOpenChat, onOpenProfile }: Props) {
             <Button variant="accent" size="md" className="mt-4" onClick={onOpenChat} rightIcon={<MessageSquare size={14} />}>Start chatting</Button>
           </Card>
 
+          <TipsTrigger onClick={() => setTipsOpen(true)} />
+
           <RiskCard
             diabetes={parseFloat(risks.diabetes)}
             hypertension={parseFloat(risks.hypertension)}
@@ -99,6 +104,13 @@ export function Dashboard({ onOpenChat, onOpenProfile }: Props) {
           </div>
         </div>
       </motion.div>
+
+      <TipsModal
+        isOpen={tipsOpen}
+        onClose={() => setTipsOpen(false)}
+        userData={user}
+        risks={risks}
+      />
 
       <AnimatePresence>
         {detail && <LogDetailSheet type={detail} onClose={() => setDetail(null)} />}
